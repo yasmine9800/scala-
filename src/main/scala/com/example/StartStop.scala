@@ -52,13 +52,13 @@ class StartStopActor2(context: ActorContext[String]) extends AbstractBehavior[St
 }
 
 
-object Main {
+object StartStopMain {
   def apply(): Behavior[String] =
-    Behaviors.setup(context => new Main(context))
+    Behaviors.setup(context => new StartStopMain(context))
 
 }
 
-class Main(context: ActorContext[String]) extends AbstractBehavior[String](context) {
+class StartStopMain(context: ActorContext[String]) extends AbstractBehavior[String](context) {
   override def onMessage(msg: String): Behavior[String] =
     msg match {
       case "start" =>
@@ -69,7 +69,7 @@ class Main(context: ActorContext[String]) extends AbstractBehavior[String](conte
 }
 
 object StartStopExample extends App {
-  val testSystem = ActorSystem(Main(), "testSystem")
+  val testSystem = ActorSystem(StartStopMain(), "testSystem")
   testSystem ! "start"
   println(s"ActorSystem: $testSystem")
 }
