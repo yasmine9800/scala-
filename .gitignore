@@ -9,4 +9,6 @@ target/
 
 .metals
 .bloop
-
+.vscode
+project/metals.sbt
+project/project
