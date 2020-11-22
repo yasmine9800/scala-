@@ -29,7 +29,20 @@ Bar
 Serveurs
 Consommateurs
 Barmans
-…
+
+Client                  Serveur                           Barman                Bar
+  |                        |                               |                     |
+  |--------------------------------Bonjour(c)----------------------------------->|
+  |<------------------VotreServeur(s)--------------------------------------------|
+  |                        |                               |                     |
+  |--Commande("café",c)--->|                               |                     |
+  |                        |----Commande("café", c, s)---->|                     |
+  |                        |<---Livraison("café", c, 150)--|                     |
+  |                        |                               |                     |
+  |<-Livraison("café",150)-|                               |                     |
+  |----------------------Livraison("café", 150)------pour les stats------------->|
+  |--Payer(150,c)--------->|                               |                     |
+
 
 Pour commencer :
 - [X] Créer un bar
@@ -39,10 +52,10 @@ Pour commencer :
 
 Pour continuer :
 - [X] Bob s'adresse au bar pour demander l'ActorRef d'un serveur
-- [-] le bar réponds avec un ActorRef de serveur
+- [X] le bar réponds avec un ActorRef de serveur
 
 Pour finir :
-- [ ] Bob passe sa commande le serveur la gère
+- [-] Bob passe sa commande le serveur la gère
 */
 
 object Serveur {
@@ -69,25 +82,27 @@ object Client {
   trait Command
   final case class VotreServeur(serveur: ActorRef[Serveur.Command]) extends Command
 
-  def apply(bar: ActorRef[String]): Behavior[Client.Command] =
+  def apply(bar: ActorRef[Bar.Command]): Behavior[Client.Command] =
     Behaviors.setup(context => new Client(bar, context))
 }
 
-class Client(bar: ActorRef[String], context: ActorContext[Client.Command]) extends AbstractBehavior[Client.Command](context) {
-  var serveur: Option[ActorRef[String]] = None 
+class Client(bar: ActorRef[Bar.Command], context: ActorContext[Client.Command]) extends AbstractBehavior[Client.Command](context) {
+  var monserveur: Option[ActorRef[Serveur.Command]] = None 
   context.log.info("Hello !")
-  bar ! "Bonjour"
+  import Bar.Bonjour
   import Client._
   import Serveur.Order
 
+  bar ! Bonjour(context.self)
+ 
   override def onMessage(msg: Command): Behavior[Command] =
     msg match {
       case VotreServeur(serveur) =>
+        monserveur = Some(serveur)
         serveur ! Order("un café", context.self)
         this
     }
 }
-
 
 object BarMain {
   def apply(): Behavior[String] =
@@ -100,19 +115,42 @@ class BarMain(context: ActorContext[String]) extends AbstractBehavior[String](co
   override def onMessage(msg: String): Behavior[String] =
     msg match {
       case "start" =>
+        /* créons un bar */
+        val bar = context.spawn(Bar(), "LeTurfu")
+        bar ! Bar.Start
+        /* créons un premier client, Bob et donnons lui l'adresse du Bar */
+        val bob = context.spawn(Client(bar), "Bob")
+        this
+    }
+}
+
+object Bar {
+  trait Command
+  final case object Start extends Command
+  final case class Bonjour(replyTo: ActorRef[Client.Command]) extends Command
+
+  def apply(): Behavior[Command] =
+    Behaviors.setup(context => new Bar(context))
+}
+
+class Bar(context: ActorContext[Bar.Command]) extends AbstractBehavior[Bar.Command](context) {
+  var serveurs = Set.empty[ActorRef[Serveur.Command]]
+  import Bar._
+
+  override def onMessage(msg: Command): Behavior[Command] =
+    msg match {
+      case Start =>
         /* créons des serveurs */
         serveurs = Range(1,3).map( 
           (i) => context.spawn(Serveur(), s"serveur-$i")
         ).toSet
-        /* créons un premier client, Bob et donnons lui l'adresse du Bar */
-        val bob = context.spawn(Client(context.self), "Bob")
         this
-      case "Bonjour" =>
+      case Bonjour(client) =>
         import Client.VotreServeur
-        context.log.info("On a un client !")
+        context.log.info("On a un client {} !", client)
         val i = Random.nextInt(serveurs.size)
         val msg = VotreServeur(serveurs.view(i, i + 1).head)
-        context.log.info("TODO à qui envoyer {} ?", msg)
+        client ! msg
         this
     }
 }
