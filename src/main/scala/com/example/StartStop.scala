@@ -14,8 +14,11 @@ object StartStopActor1 {
 }
 
 class StartStopActor1(context: ActorContext[String]) extends AbstractBehavior[String](context) {
-  println("first started")
-  context.spawn(StartStopActor2(), "second")
+  println(s"${context.self} started")
+  context.spawn(StartStopActor2(), "Clooney")
+  context.spawn(StartStopActor2(), "Oscar")
+  context.spawn(StartStopActor2(), "Alice")
+  context.spawn(StartStopActor2(), "Bob")
 
   override def onMessage(msg: String): Behavior[String] =
     msg match {
@@ -24,7 +27,7 @@ class StartStopActor1(context: ActorContext[String]) extends AbstractBehavior[St
 
   override def onSignal: PartialFunction[Signal, Behavior[String]] = {
     case PostStop =>
-      println("first stopped")
+      println(s"${context.self} stopped")
       this
   }
 
@@ -36,7 +39,7 @@ object StartStopActor2 {
 }
 
 class StartStopActor2(context: ActorContext[String]) extends AbstractBehavior[String](context) {
-  println("second started")
+  println(s"${context.self} started")
 
   override def onMessage(msg: String): Behavior[String] = {
     // no messages handled by this actor
@@ -45,7 +48,7 @@ class StartStopActor2(context: ActorContext[String]) extends AbstractBehavior[St
 
   override def onSignal: PartialFunction[Signal, Behavior[String]] = {
     case PostStop =>
-      println("second stopped")
+      println(s"${context.self} stopped")
       this
   }
 
@@ -62,7 +65,7 @@ class StartStopMain(context: ActorContext[String]) extends AbstractBehavior[Stri
   override def onMessage(msg: String): Behavior[String] =
     msg match {
       case "start" =>
-        val first = context.spawn(StartStopActor1(), "first")
+        val first = context.spawn(StartStopActor1(), "Charles")
         first ! "stop"
         this
     }
