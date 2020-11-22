@@ -33,9 +33,9 @@ Barmans
 
 Pour commencer :
 - [X] Créer un bar
-- [ ] Créer un serveur
-- [ ] Créer Bob (dans le bar)
-- [ ] Bob dit bonjour au bar
+- [X] Créer un serveur
+- [X] Créer Bob (dans le bar)
+- [X] Bob dit bonjour au bar
 
 Pour continuer :
 - [ ] Bob s'adresse au bar pour demander l'ActorRef d'un serveur
@@ -45,16 +45,58 @@ Pour finir :
 - [ ] Bob passe sa commande le serveur la gère
 */
 
+object Serveur {
+  def apply(): Behavior[String] =
+    Behaviors.setup(context => new Serveur(context))
+}
+
+class Serveur(context: ActorContext[String]) extends AbstractBehavior[String](context) {
+  context.log.info("Hello !")
+
+  override def onMessage(msg: String): Behavior[String] =
+    msg match {
+      case "garçon!" =>
+        context.log.info("TODO")
+        this
+    }
+}
+
+object Client {
+  def apply(bar: ActorRef[String]): Behavior[String] =
+    Behaviors.setup(context => new Client(bar, context))
+}
+
+class Client(bar: ActorRef[String], context: ActorContext[String]) extends AbstractBehavior[String](context) {
+  context.log.info("Hello !")
+  bar ! "Bonjour"
+
+  override def onMessage(msg: String): Behavior[String] =
+    msg match {
+      case "bonjour" =>
+        context.log.info("TODO")
+        this
+    }
+}
+
+
 object BarMain {
   def apply(): Behavior[String] =
     Behaviors.setup(context => new BarMain(context))
 }
 
 class BarMain(context: ActorContext[String]) extends AbstractBehavior[String](context) {
+  var serveurs = Set.empty[ActorRef[String]]
+
   override def onMessage(msg: String): Behavior[String] =
     msg match {
       case "start" =>
-        context.log.info("TODO")
+        serveurs = Range(1,3).map( 
+          (i) => context.spawn(Serveur(), s"serveur-$i")
+        ).toSet
+        val bob = context.spawn(Client(context.self), "Bob")
+        this
+      case "Bonjour" =>
+        context.log.info("On a un client !")
         this
     }
 }
