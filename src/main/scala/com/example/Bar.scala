@@ -6,7 +6,7 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.AbstractBehavior
 import akka.actor.typed.scaladsl.ActorContext
-
+import scala.util.Random
 /*
 Bob avise un bar
 Bob entre dans le bar
@@ -38,42 +38,52 @@ Pour commencer :
 - [X] Bob dit bonjour au bar
 
 Pour continuer :
-- [ ] Bob s'adresse au bar pour demander l'ActorRef d'un serveur
-- [ ] le bar réponds avec un ActorRef de serveur
+- [X] Bob s'adresse au bar pour demander l'ActorRef d'un serveur
+- [-] le bar réponds avec un ActorRef de serveur
 
 Pour finir :
 - [ ] Bob passe sa commande le serveur la gère
 */
 
 object Serveur {
-  def apply(): Behavior[String] =
+  trait Command
+  final case class Order(conso: String, consumer: ActorRef[Client.Command]) extends Command
+
+  def apply(): Behavior[Command] =
     Behaviors.setup(context => new Serveur(context))
 }
 
-class Serveur(context: ActorContext[String]) extends AbstractBehavior[String](context) {
+class Serveur(context: ActorContext[Serveur.Command]) extends AbstractBehavior[Serveur.Command](context) {
   context.log.info("Hello !")
+  import Serveur._
 
-  override def onMessage(msg: String): Behavior[String] =
+  override def onMessage(msg: Command): Behavior[Command] =
     msg match {
-      case "garçon!" =>
-        context.log.info("TODO")
+      case msg @ Order(conso, client) =>
+        context.log.info("TODO: process {} and answer", msg)
         this
     }
 }
 
 object Client {
-  def apply(bar: ActorRef[String]): Behavior[String] =
+  trait Command
+  final case class VotreServeur(serveur: ActorRef[Serveur.Command]) extends Command
+
+  def apply(bar: ActorRef[String]): Behavior[Client.Command] =
     Behaviors.setup(context => new Client(bar, context))
 }
 
-class Client(bar: ActorRef[String], context: ActorContext[String]) extends AbstractBehavior[String](context) {
+class Client(bar: ActorRef[String], context: ActorContext[Client.Command]) extends AbstractBehavior[Client.Command](context) {
+  var serveur: Option[ActorRef[String]] = None 
   context.log.info("Hello !")
   bar ! "Bonjour"
+  import Client._
+  import Serveur.Order
 
-  override def onMessage(msg: String): Behavior[String] =
+  override def onMessage(msg: Command): Behavior[Command] =
     msg match {
-      case "bonjour" =>
-        context.log.info("TODO")
+      case VotreServeur(serveur) =>
+        serveur ! Order("un café", context.self)
         this
     }
 }
@@ -85,18 +95,24 @@ object BarMain {
 }
 
 class BarMain(context: ActorContext[String]) extends AbstractBehavior[String](context) {
-  var serveurs = Set.empty[ActorRef[String]]
+   var serveurs = Set.empty[ActorRef[Serveur.Command]]
 
   override def onMessage(msg: String): Behavior[String] =
     msg match {
       case "start" =>
+        /* créons des serveurs */
         serveurs = Range(1,3).map( 
           (i) => context.spawn(Serveur(), s"serveur-$i")
         ).toSet
+        /* créons un premier client, Bob et donnons lui l'adresse du Bar */
         val bob = context.spawn(Client(context.self), "Bob")
         this
       case "Bonjour" =>
+        import Client.VotreServeur
         context.log.info("On a un client !")
+        val i = Random.nextInt(serveurs.size)
+        val msg = VotreServeur(serveurs.view(i, i + 1).head)
+        context.log.info("TODO à qui envoyer {} ?", msg)
         this
     }
 }
