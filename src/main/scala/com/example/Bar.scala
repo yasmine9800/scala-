@@ -40,8 +40,7 @@ Client                  Serveur                           Barman                
   |                        |<---Livraison("café", c, 150)--|                     |
   |                        |                               |                     |
   |<-Livraison("café",150)-|                               |                     |
-  |----------------------Livraison("café", 150)------pour les stats------------->|
-  |--Payer(150,c)--------->|                               |                     |
+  |--Merci(150,c)--------->|                               |                     |
 
 
 Pour commencer :
@@ -56,11 +55,15 @@ Pour continuer :
 
 Pour finir :
 - [-] Bob passe sa commande le serveur la gère
+
+Comment utiliser le Barman pour préparer la commande ?
 */
 
 object Serveur {
   trait Command
-  final case class Order(conso: String, consumer: ActorRef[Client.Command]) extends Command
+  final case class Order(conso: String, client: ActorRef[Client.Command]) extends Command
+  final case class Livraison(conso: String, prix: String, client: ActorRef[Client.Command]) extends Command
+  final case class Merci(prix: String, client: ActorRef[Client.Command]) extends Command
 
   def apply(): Behavior[Command] =
     Behaviors.setup(context => new Serveur(context))
@@ -73,7 +76,32 @@ class Serveur(context: ActorContext[Serveur.Command]) extends AbstractBehavior[S
   override def onMessage(msg: Command): Behavior[Command] =
     msg match {
       case msg @ Order(conso, client) =>
-        context.log.info("TODO: process {} and answer", msg)
+        client ! Client.Livraison(conso, "2€")
+        this
+      case Merci(prix, client) =>
+        context.log.info("Bonne journée {}", client)
+        this
+    }
+}
+
+object Barman {
+  trait Command
+  final case class Order(conso: String, 
+    client: ActorRef[Client.Command], 
+    serveur: ActorRef[Serveur.Command]) extends Command
+
+  def apply(): Behavior[Command] =
+    Behaviors.setup(context => new Barman(context))
+}
+
+class Barman(context: ActorContext[Barman.Command]) extends AbstractBehavior[Barman.Command](context) {
+  context.log.info("Hello !")
+  import Barman._
+
+  override def onMessage(msg: Command): Behavior[Command] =
+    msg match {
+      case msg @ Order(conso, client, serveur) =>
+        serveur ! Serveur.Livraison(conso, "2€", client)
         this
     }
 }
@@ -81,6 +109,7 @@ class Serveur(context: ActorContext[Serveur.Command]) extends AbstractBehavior[S
 object Client {
   trait Command
   final case class VotreServeur(serveur: ActorRef[Serveur.Command]) extends Command
+  final case class Livraison(conso: String, prix: String) extends Command
 
   def apply(bar: ActorRef[Bar.Command]): Behavior[Client.Command] =
     Behaviors.setup(context => new Client(bar, context))
@@ -101,6 +130,10 @@ class Client(bar: ActorRef[Bar.Command], context: ActorContext[Client.Command]) 
         monserveur = Some(serveur)
         serveur ! Order("un café", context.self)
         this
+      case Livraison(conso, prix) =>
+        context.log.info("{} délicieux", conso)
+        monserveur.map(_ ! Serveur.Merci(prix, context.self)) 
+        this
     }
 }
 
@@ -120,6 +153,8 @@ class BarMain(context: ActorContext[String]) extends AbstractBehavior[String](co
         bar ! Bar.Start
         /* créons un premier client, Bob et donnons lui l'adresse du Bar */
         val bob = context.spawn(Client(bar), "Bob")
+        /* créons un million de clients */
+        // Range(0,1000000).map( (i) => context.spawn(Client(bar), s"client-$i"))
         this
     }
 }
